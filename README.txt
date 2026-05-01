@@ -30,11 +30,6 @@ The application follows a decoupled Microservices-lite architecture:
                                                External Infrastructure
                                                (Targets: Domains/IPs)
 
-Scan Execution Logic
---------------------
-
-http://googleusercontent.com/image_content/170
-
 
 
 The engine processes targets using a prioritized asynchronous pipeline:
