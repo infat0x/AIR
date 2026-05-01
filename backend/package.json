@@ -1,0 +1,28 @@
+{
+  "name": "amireachable-backend",
+  "version": "3.0.0",
+  "description": "Domain External Reachability Scanner - Backend API",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "keywords": [
+    "domain",
+    "scanner",
+    "reachability",
+    "http",
+    "dns"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.1",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {}
+}
