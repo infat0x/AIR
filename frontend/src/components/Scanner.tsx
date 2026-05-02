@@ -17,7 +17,7 @@ export default function Scanner() {
   const [error, setError] = useState('')
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [progress, setProgress] = useState<{ total: number; elapsed: number } | null>(null)
+  const [progress, setProgress] = useState<{ total: number; elapsed: number; phase?: string; scanned?: number; phaseTotal?: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -132,7 +132,7 @@ export default function Scanner() {
 
       let isCompleted = false
       let attempts = 0
-      const maxAttempts = 300
+      const maxAttempts = 600 // 10 minutes
 
       while (!isCompleted && attempts < maxAttempts) {
         attempts++
@@ -147,6 +147,14 @@ export default function Scanner() {
             globalThis.setTimeout(() => saveToHistory(parsedDomains), 100)
           } else if (result.status === 'error') {
             throw new Error(result.error || 'Scan failed')
+          } else if (result.status === 'scanning' && result.progress) {
+            // Update progress from backend
+            setProgress((p) => p ? {
+              ...p,
+              phase: result.progress.phase,
+              scanned: result.progress.scanned,
+              phaseTotal: result.progress.total,
+            } : p)
           }
         } catch (pollError: any) {
           if (pollError.message !== 'Failed to fetch') throw pollError
@@ -189,26 +197,50 @@ export default function Scanner() {
               }}
             />
             <div className="absolute inset-2 rounded-full flex items-center justify-center" style={{ background: '#111' }}>
-              <Globe className="w-8 h-8" style={{ color: '#0078d4' }} />
+              {progress.phase === 'screenshot' ? (
+                <Camera className="w-8 h-8" style={{ color: '#0078d4' }} />
+              ) : (
+                <Globe className="w-8 h-8" style={{ color: '#0078d4' }} />
+              )}
             </div>
           </div>
 
           <h2 className="text-xl font-bold mb-1" style={{ color: '#e0e0e0' }}>
-            {t('scan_status')}
+            {progress.phase === 'screenshot' ? '📸 Taking Screenshots...' : t('scan_status')}
           </h2>
-          <p className="text-sm mb-8" style={{ color: '#71717a' }}>
-            Scanning <span style={{ color: '#0078d4', fontWeight: 600 }}>{progress.total}</span> hosts
-            {enableScreenshots && ' with screenshots'}
+          <p className="text-sm mb-3" style={{ color: '#71717a' }}>
+            {progress.scanned !== undefined && progress.phaseTotal ? (
+              <>
+                <span style={{ color: '#4da6ff', fontWeight: 600 }}>{progress.scanned}</span>
+                {' / '}
+                <span style={{ color: '#e0e0e0', fontWeight: 600 }}>{progress.phaseTotal}</span>
+                {progress.phase === 'screenshot' ? ' screenshots' : ' hosts'}
+              </>
+            ) : (
+              <>
+                Scanning <span style={{ color: '#0078d4', fontWeight: 600 }}>{progress.total}</span> hosts
+              </>
+            )}
           </p>
 
+          {/* Percentage */}
+          {progress.scanned !== undefined && progress.phaseTotal ? (
+            <p className="text-2xl font-bold mb-4" style={{ color: '#0078d4' }}>
+              {Math.round((progress.scanned / progress.phaseTotal) * 100)}%
+            </p>
+          ) : null}
+
           {/* Progress bar */}
-          <div className="relative w-full h-2 rounded-full overflow-hidden mb-4" style={{ background: '#1a1a1a' }}>
+          <div className="relative w-full h-3 rounded-full overflow-hidden mb-4" style={{ background: '#1a1a1a' }}>
             <div
-              className="h-full rounded-full"
+              className="h-full rounded-full transition-all duration-500"
               style={{
-                background: 'linear-gradient(90deg, #0078d4, #00b4d8)',
-                animation: 'progressPulse 2s ease-in-out infinite',
-                width: '100%',
+                background: progress.phase === 'screenshot'
+                  ? 'linear-gradient(90deg, #f97316, #fbbf24)'
+                  : 'linear-gradient(90deg, #0078d4, #00b4d8)',
+                width: progress.scanned !== undefined && progress.phaseTotal
+                  ? `${Math.max(3, (progress.scanned / progress.phaseTotal) * 100)}%`
+                  : '15%',
               }}
             />
             {/* Shimmer effect */}

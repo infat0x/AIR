@@ -61,7 +61,7 @@ router.post('/scan', upload.single('file'), async (req, res) => {
 
     const scanId = uuidv4();
     const workers = Math.min(options.workers || 12, 32);
-    const timeout = Math.min(options.timeout || 10000, 30000);
+    const timeout = Math.min(options.timeout || 8000, 30000);
     const screenshot = options.screenshot || false;
 
     // Flatten domains to individual hosts
@@ -74,13 +74,22 @@ router.post('/scan', upload.single('file'), async (req, res) => {
     // Set status to pending
     scanCache.set(scanId, {
       id: scanId,
-      status: 'pending',
+      status: 'scanning',
       startTime: new Date(),
       entriesCount: entries.length,
+      progress: { phase: 'scan', scanned: 0, total: entries.length },
     });
 
+    // Progress callback — updates cache so frontend can poll
+    const onProgress = (prog) => {
+      const cached = scanCache.get(scanId);
+      if (cached) {
+        cached.progress = prog;
+      }
+    };
+
     // Start async scan
-    scanMultipleHosts(entries, { workers, timeout, screenshot })
+    scanMultipleHosts(entries, { workers, timeout, screenshot }, onProgress)
       .then((results) => {
         const stats = calculateStats(results);
         const scanData = {
@@ -133,13 +142,14 @@ router.get('/scan/:scanId', (req, res) => {
     });
   }
 
-  if (scanData.status === 'pending') {
+  if (scanData.status === 'scanning' || scanData.status === 'pending') {
     return res.json({
-      status: 'pending',
+      status: 'scanning',
       results: [],
       stats: null,
       startTime: scanData.startTime,
       entriesCount: scanData.entriesCount,
+      progress: scanData.progress || null,
     });
   }
 

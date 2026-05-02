@@ -8,26 +8,11 @@ import { hasCloudflareIP } from './cloudflare.js';
 const dnsLookup = promisify(dns.lookup);
 
 const SKIP_PREFIXES = [
-  '_dmarc.',
-  '_domainkey.',
-  '_bbcab.',
-  '_6a24.',
-  '_sip.',
-  '_sipfed.',
-  '_autodiscover.',
-  'mail._domainkey.',
-  'k2._domainkey.',
-  'k3._domainkey.',
-  's1._domainkey.',
-  's2._domainkey.',
-  'em2443.',
-  'selector1._domainkey.',
-  'default._domainkey.',
-  '230619',
-  'cf2024',
-  'frzr',
-  'wziut',
-  'p9up',
+  '_dmarc.', '_domainkey.', '_bbcab.', '_6a24.', '_sip.',
+  '_sipfed.', '_autodiscover.', 'mail._domainkey.',
+  'k2._domainkey.', 'k3._domainkey.', 's1._domainkey.',
+  's2._domainkey.', 'em2443.', 'selector1._domainkey.',
+  'default._domainkey.', '230619', 'cf2024', 'frzr', 'wziut', 'p9up',
 ];
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -36,26 +21,23 @@ async function resolveDns(host) {
   try {
     const result = await dnsLookup(host);
     return [result.address];
-  } catch (err) {
+  } catch {
     return [];
   }
 }
 
-async function checkHttp(host, scheme = 'https', timeout = 10000) {
+async function checkHttp(host, scheme = 'https', timeout = 8000) {
   const url = `${scheme}://${host}`;
-
   try {
     const response = await axios.get(url, {
       timeout,
-      maxRedirects: 5,
+      maxRedirects: 3,
       validateStatus: () => true,
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0',
       },
       httpsAgent,
     });
-
     return {
       code: response.status,
       url: response.request?.res?.responseUrl || response.config.url,
@@ -63,65 +45,32 @@ async function checkHttp(host, scheme = 'https', timeout = 10000) {
       error: null,
     };
   } catch (err) {
-    return {
-      code: null,
-      url,
-      headers: {},
-      error: err.message,
-    };
+    return { code: null, url, headers: {}, error: err.message };
   }
 }
 
-async function checkTcp(host, port, timeout = 5000) {
+async function checkTcp(host, port, timeout = 3000) {
   return new Promise((resolve) => {
-    const socket = net.createConnection(
-      {
-        host,
-        port,
-        timeout,
-      },
-      () => {
-        socket.destroy();
-        resolve(true);
-      }
-    );
-
-    socket.on('error', () => {
-      resolve(false);
-    });
-
-    socket.on('timeout', () => {
+    const socket = net.createConnection({ host, port, timeout }, () => {
       socket.destroy();
-      resolve(false);
+      resolve(true);
     });
+    socket.on('error', () => resolve(false));
+    socket.on('timeout', () => { socket.destroy(); resolve(false); });
   });
 }
 
 function classifyStatus(httpCode, tcp443, tcp80, ips) {
-  if (!ips || ips.length === 0) {
-    return { status: 'NO_DNS', icon: '⛔' };
-  }
-  if ([200, 201, 301, 302, 303, 307, 308].includes(httpCode)) {
-    return { status: 'OPEN', icon: '✅' };
-  }
-  if ([401, 403].includes(httpCode)) {
-    return { status: 'OPEN (Auth)', icon: '🔒' };
-  }
-  if (httpCode && httpCode >= 400) {
-    return { status: 'OPEN (Error)', icon: '⚠️' };
-  }
-  if (tcp443 || tcp80) {
-    return { status: 'TCP OPEN', icon: '🟡' };
-  }
-  if (ips && ips.length > 0) {
-    return { status: 'DNS ONLY', icon: '🟠' };
-  }
+  if (!ips || ips.length === 0) return { status: 'NO_DNS', icon: '⛔' };
+  if ([200, 201, 301, 302, 303, 307, 308].includes(httpCode)) return { status: 'OPEN', icon: '✅' };
+  if ([401, 403].includes(httpCode)) return { status: 'OPEN (Auth)', icon: '🔒' };
+  if (httpCode && httpCode >= 400) return { status: 'OPEN (Error)', icon: '⚠️' };
+  if (tcp443 || tcp80) return { status: 'TCP OPEN', icon: '🟡' };
+  if (ips && ips.length > 0) return { status: 'DNS ONLY', icon: '🟠' };
   return { status: 'CLOSED', icon: '❌' };
 }
 
-/**
- * Shared browser instance for screenshots
- */
+// ── Shared Puppeteer browser ──────────────────────────────────
 let _browser = null;
 let _browserPromise = null;
 
@@ -133,38 +82,28 @@ async function getBrowser() {
     try {
       const puppeteer = await import('puppeteer').catch(() => null);
       if (!puppeteer) return null;
-
       _browser = await puppeteer.default.launch({
         headless: 'new',
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--ignore-certificate-errors',
-          '--ignore-certificate-errors-spki-list',
-          '--disable-web-security',
+          '--no-sandbox', '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage', '--disable-gpu',
+          '--ignore-certificate-errors', '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
         ],
         ignoreHTTPSErrors: true,
       });
-
-      console.log('📸 Puppeteer browser launched for screenshots');
+      console.log('📸 Puppeteer browser launched');
       return _browser;
     } catch (err) {
-      console.error('📸 Failed to launch Puppeteer:', err.message);
+      console.error('📸 Puppeteer failed:', err.message);
       return null;
     } finally {
       _browserPromise = null;
     }
   })();
-
   return _browserPromise;
 }
 
-/**
- * Take a screenshot of a URL
- */
 async function takeScreenshot(url) {
   const browser = await getBrowser();
   if (!browser) return null;
@@ -173,254 +112,187 @@ async function takeScreenshot(url) {
   try {
     page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
-    await page.setUserAgent(
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36'
-    );
+    await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0');
 
-    // Block heavy resources for speed
     await page.setRequestInterception(true);
     page.on('request', (req) => {
-      const type = req.resourceType();
-      if (['font', 'media', 'websocket'].includes(type)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
+      const t = req.resourceType();
+      if (['font', 'media', 'websocket', 'manifest'].includes(t)) req.abort();
+      else req.continue();
     });
 
-    await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 12000,
-    });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await new Promise((r) => globalThis.setTimeout(r, 600));
 
-    // Small wait for rendering
-    await new Promise((r) => globalThis.setTimeout(r, 800));
-
-    const screenshot = await page.screenshot({
-      type: 'jpeg',
-      quality: 60,
-      clip: { x: 0, y: 0, width: 1280, height: 720 },
-    });
-
-    return `data:image/jpeg;base64,${screenshot.toString('base64')}`;
-  } catch (err) {
-    // Silently fail — screenshot is optional
+    const buf = await page.screenshot({ type: 'jpeg', quality: 55, clip: { x: 0, y: 0, width: 1280, height: 720 } });
+    return `data:image/jpeg;base64,${buf.toString('base64')}`;
+  } catch {
     return null;
   } finally {
-    if (page) {
-      try { await page.close(); } catch {}
-    }
+    if (page) try { await page.close(); } catch {}
   }
 }
 
-export async function scanHost(entry, options = {}) {
-  const { timeout = 10000, screenshot = false } = options;
-  const domain = entry.domain;
-  const isSubdomain = entry.is_subdomain || false;
-  const host = entry.host;
-
+// ── Scan a single host (fast — no screenshot) ─────────────────
+async function scanHostFast(entry, timeout = 8000) {
+  const { domain, host, is_subdomain: isSubdomain = false } = entry;
   const startTime = Date.now();
 
-  // DNS Resolution
+  // DNS
   const ips = await resolveDns(host);
 
-  // HTTP Check (try HTTPS first, then HTTP)
-  let httpResult = await checkHttp(host, 'https', timeout);
-  let usedScheme = 'https';
-  if (httpResult.code === null) {
-    const httpFallback = await checkHttp(host, 'http', timeout);
-    if (httpFallback.code !== null) {
-      httpResult = httpFallback;
-      usedScheme = 'http';
-    }
-  }
-
-  // TCP Checks
-  const [tcp443, tcp80] = await Promise.all([
-    checkTcp(host, 443, 5000),
-    checkTcp(host, 80, 5000),
+  // HTTP + TCP in parallel
+  const [httpResult, tcp443, tcp80] = await Promise.all([
+    (async () => {
+      let r = await checkHttp(host, 'https', timeout);
+      if (r.code === null) {
+        const fallback = await checkHttp(host, 'http', timeout);
+        if (fallback.code !== null) return { ...fallback, scheme: 'http' };
+      }
+      return { ...r, scheme: 'https' };
+    })(),
+    checkTcp(host, 443, 3000),
+    checkTcp(host, 80, 3000),
   ]);
 
-  // Status Classification
   const { status, icon } = classifyStatus(httpResult.code, tcp443, tcp80, ips);
 
-  // Cloudflare Detection
+  // Cloudflare
   const isCloudflare = hasCloudflareIP(ips);
-
-  // Parse Headers
   const headers = httpResult.headers || {};
   const headerKeys = Object.keys(headers).map((k) => k.toLowerCase());
-
-  const server = headers['server'] || '';
-  const contentType = (headers['content-type'] || '').split(';')[0].trim();
-  const hsts = headerKeys.includes('strict-transport-security');
-  const xFrame = headers['x-frame-options'] || '';
-  const xPoweredBy = headers['x-powered-by'] || '';
-  const xContentType = headers['x-content-type-options'] || '';
-  const csp = headerKeys.includes('content-security-policy');
-
-  // Cloudflare via headers
   const cfRay = headers['cf-ray'] || '';
   const cfCache = headers['cf-cache-status'] || '';
-  const isCloudflareByHeader = !!(cfRay || cfCache);
-  const cloudflare = isCloudflare || isCloudflareByHeader;
+  const cloudflare = isCloudflare || !!(cfRay || cfCache);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-  // Screenshot — take for any host with an HTTP response
-  let screenshotData = null;
-  if (screenshot && httpResult.code && httpResult.url) {
-    screenshotData = await takeScreenshot(httpResult.url).catch(() => null);
-  }
-
   return {
-    domain,
-    host,
-    is_subdomain: isSubdomain,
-    dns_resolved: ips.length > 0,
-    ips,
-    http_code: httpResult.code,
-    http_error: httpResult.error,
-    final_url: httpResult.url,
-    scheme: usedScheme,
-    tcp_443: tcp443,
-    tcp_80: tcp80,
-    status,
-    status_icon: icon,
-    server,
-    content_type: contentType,
-    x_powered_by: xPoweredBy,
-    hsts,
-    x_frame_options: xFrame,
-    x_content_type: xContentType,
-    csp,
-    cloudflare,
-    cf_ray: cfRay,
+    domain, host, is_subdomain: isSubdomain,
+    dns_resolved: ips.length > 0, ips,
+    http_code: httpResult.code, http_error: httpResult.error,
+    final_url: httpResult.url, scheme: httpResult.scheme,
+    tcp_443: tcp443, tcp_80: tcp80,
+    status, status_icon: icon,
+    server: headers['server'] || '',
+    content_type: (headers['content-type'] || '').split(';')[0].trim(),
+    x_powered_by: headers['x-powered-by'] || '',
+    hsts: headerKeys.includes('strict-transport-security'),
+    x_frame_options: headers['x-frame-options'] || '',
+    x_content_type: headers['x-content-type-options'] || '',
+    csp: headerKeys.includes('content-security-policy'),
+    cloudflare, cf_ray: cfRay,
     whatweb: [],
-    screenshot: screenshotData,
+    screenshot: null,
     scan_time_s: parseFloat(elapsed),
     scanned_at: new Date().toISOString(),
   };
 }
 
-export async function scanMultipleHosts(entries, options = {}) {
-  const { workers = 12, timeout = 10000, screenshot = false } = options;
-
+// ── Concurrency helper ────────────────────────────────────────
+async function runWithConcurrency(items, fn, concurrency) {
   const results = [];
-  const semaphore = { count: 0, max: workers, queue: [] };
+  let idx = 0;
 
-  const acquire = () =>
-    new Promise((resolve) => {
-      if (semaphore.count < semaphore.max) {
-        semaphore.count++;
-        resolve();
-      } else {
-        semaphore.queue.push(resolve);
-      }
-    });
-
-  const release = () => {
-    semaphore.count--;
-    if (semaphore.queue.length > 0) {
-      const next = semaphore.queue.shift();
-      semaphore.count++;
-      next();
+  const worker = async () => {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i], i);
     }
   };
 
-  await Promise.all(
-    entries.map(async (entry) => {
-      await acquire();
-      try {
-        const result = await scanHost(entry, { timeout, screenshot });
-        results.push(result);
-      } catch (err) {
-        console.error(`Error scanning ${entry.host}:`, err);
-      } finally {
-        release();
-      }
-    })
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
 
-  // Sort by status priority then hostname
+// ── Main scan function ────────────────────────────────────────
+export async function scanMultipleHosts(entries, options = {}, progressCb = null) {
+  const { workers = 12, timeout = 8000, screenshot = false } = options;
+
+  // PHASE 1: Fast scan all hosts (DNS + HTTP + TCP)
+  console.log(`⚡ Phase 1: Scanning ${entries.length} hosts with ${workers} workers...`);
+  let scanned = 0;
+
+  const results = await runWithConcurrency(entries, async (entry) => {
+    const result = await scanHostFast(entry, timeout);
+    scanned++;
+    if (progressCb) progressCb({ phase: 'scan', scanned, total: entries.length });
+    return result;
+  }, workers);
+
+  console.log(`✅ Phase 1 done: ${results.length} hosts scanned`);
+
+  // PHASE 2: Screenshots (only for hosts with HTTP response, concurrency = 2)
+  if (screenshot) {
+    const screenshotTargets = results
+      .map((r, i) => ({ result: r, index: i }))
+      .filter(({ result }) => result.http_code && result.final_url);
+
+    if (screenshotTargets.length > 0) {
+      console.log(`📸 Phase 2: Taking ${screenshotTargets.length} screenshots (concurrency: 2)...`);
+      let shotsDone = 0;
+
+      await runWithConcurrency(screenshotTargets, async ({ result, index }) => {
+        const shot = await takeScreenshot(result.final_url);
+        if (shot) results[index].screenshot = shot;
+        shotsDone++;
+        if (progressCb) progressCb({ phase: 'screenshot', scanned: shotsDone, total: screenshotTargets.length });
+      }, 2); // Max 2 concurrent screenshots
+
+      console.log(`✅ Phase 2 done: screenshots captured`);
+    }
+  }
+
+  // Sort by status priority
   const statusOrder = {
-    OPEN: 0,
-    'OPEN (Auth)': 1,
-    'OPEN (Error)': 2,
-    'TCP OPEN': 3,
-    'DNS ONLY': 4,
-    CLOSED: 5,
-    NO_DNS: 6,
+    OPEN: 0, 'OPEN (Auth)': 1, 'OPEN (Error)': 2,
+    'TCP OPEN': 3, 'DNS ONLY': 4, CLOSED: 5, NO_DNS: 6,
   };
 
   results.sort(
-    (a, b) =>
-      (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) ||
-      a.host.localeCompare(b.host)
+    (a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9) || a.host.localeCompare(b.host)
   );
 
   return results;
 }
 
+// Keep backward compat export
+export async function scanHost(entry, options = {}) {
+  return scanHostFast(entry, options.timeout || 8000);
+}
+
 export function flattenDomains(data) {
   const entries = [];
-
   for (const item of data) {
     const domain = item.domain;
-
-    // Add apex domain
-    entries.push({
-      domain,
-      host: domain,
-      is_subdomain: false,
-    });
-
-    // Add subdomains
+    entries.push({ domain, host: domain, is_subdomain: false });
     if (item.subdomains && Array.isArray(item.subdomains)) {
-      for (const subdomain of item.subdomains) {
-        if (!SKIP_PREFIXES.some((prefix) => subdomain.startsWith(prefix))) {
-          entries.push({
-            domain,
-            host: subdomain,
-            is_subdomain: true,
-          });
+      for (const sub of item.subdomains) {
+        if (!SKIP_PREFIXES.some((p) => sub.startsWith(p))) {
+          entries.push({ domain, host: sub, is_subdomain: true });
         }
       }
     }
   }
-
   return entries;
 }
 
 export function calculateStats(results) {
   const counts = {};
-  let screenshotCount = 0;
-  let openCount = 0;
-  let cloudflareCount = 0;
+  let screenshotCount = 0, openCount = 0, cloudflareCount = 0;
 
-  for (const result of results) {
-    counts[result.status] = (counts[result.status] || 0) + 1;
-
-    if (result.screenshot) {
-      screenshotCount++;
-    }
-
-    if (result.status.includes('OPEN')) {
-      openCount++;
-    }
-
-    if (result.cloudflare) {
-      cloudflareCount++;
-    }
+  for (const r of results) {
+    counts[r.status] = (counts[r.status] || 0) + 1;
+    if (r.screenshot) screenshotCount++;
+    if (r.status.includes('OPEN')) openCount++;
+    if (r.cloudflare) cloudflareCount++;
   }
-
-  const closedCount = (counts['CLOSED'] || 0) + (counts['NO_DNS'] || 0);
 
   return {
     counts,
     total: results.length,
     open: openCount,
-    closed: closedCount,
+    closed: (counts['CLOSED'] || 0) + (counts['NO_DNS'] || 0),
     screenshots: screenshotCount,
     cloudflare: cloudflareCount,
   };
