@@ -1,5 +1,6 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import multer from 'multer';
 import {
   scanMultipleHosts,
   flattenDomains,
@@ -7,6 +8,7 @@ import {
 } from '../services/scanner.js';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 // In-memory scan cache (in production, use database)
 const scanCache = new Map();
@@ -14,11 +16,35 @@ const scanCache = new Map();
 /**
  * POST /api/scan
  * Start a domain scan
- * Body: { domains: Array<{domain, subdomains}>, options: {workers, timeout} }
+ * Body: { domains: Array<{domain, subdomains}>, options: {workers, timeout, screenshot} }
+ * OR multipart/form-data with `file` field containing JSON file
  */
-router.post('/scan', async (req, res) => {
+router.post('/scan', upload.single('file'), async (req, res) => {
   try {
-    const { domains, options = {} } = req.body;
+    let domains;
+    let options = {};
+
+    if (req.file) {
+      // File upload
+      try {
+        const content = JSON.parse(req.file.buffer.toString('utf-8'));
+        if (Array.isArray(content)) {
+          domains = content;
+        } else if (content.domains) {
+          domains = content.domains;
+          options = content.options || {};
+        } else {
+          return res.status(400).json({ error: 'Invalid JSON file format. Expected array of domains or {domains, options}' });
+        }
+      } catch (parseErr) {
+        return res.status(400).json({ error: `Failed to parse JSON file: ${parseErr.message}` });
+      }
+    } else {
+      // Regular JSON body
+      const body = req.body;
+      domains = body.domains;
+      options = body.options || {};
+    }
 
     if (!domains || !Array.isArray(domains) || domains.length === 0) {
       return res.status(400).json({ error: 'Invalid domains array' });
@@ -27,6 +53,7 @@ router.post('/scan', async (req, res) => {
     const scanId = uuidv4();
     const workers = Math.min(options.workers || 12, 32);
     const timeout = Math.min(options.timeout || 10000, 30000);
+    const screenshot = options.screenshot || false;
 
     // Flatten domains to individual hosts
     const entries = flattenDomains(domains);
@@ -35,14 +62,22 @@ router.post('/scan', async (req, res) => {
       return res.status(400).json({ error: 'No valid domains to scan' });
     }
 
+    // Set status to pending
+    scanCache.set(scanId, {
+      id: scanId,
+      status: 'pending',
+      startTime: new Date(),
+      entriesCount: entries.length,
+    });
+
     // Start async scan
-    scanMultipleHosts(entries, { workers, timeout })
+    scanMultipleHosts(entries, { workers, timeout, screenshot })
       .then((results) => {
         const stats = calculateStats(results);
         const scanData = {
           id: scanId,
           status: 'completed',
-          startTime: new Date(),
+          startTime: scanCache.get(scanId)?.startTime || new Date(),
           results,
           stats,
           domains,
@@ -50,7 +85,7 @@ router.post('/scan', async (req, res) => {
         scanCache.set(scanId, scanData);
 
         // Keep cache for 24 hours
-        setTimeout(() => scanCache.delete(scanId), 24 * 60 * 60 * 1000);
+        globalThis.setTimeout(() => scanCache.delete(scanId), 24 * 60 * 60 * 1000);
       })
       .catch((err) => {
         scanCache.set(scanId, {
@@ -89,6 +124,16 @@ router.get('/scan/:scanId', (req, res) => {
     });
   }
 
+  if (scanData.status === 'pending') {
+    return res.json({
+      status: 'pending',
+      results: [],
+      stats: null,
+      startTime: scanData.startTime,
+      entriesCount: scanData.entriesCount,
+    });
+  }
+
   res.json({
     status: scanData.status,
     results: scanData.results || [],
@@ -120,6 +165,7 @@ router.get('/scan/:scanId/export', (req, res) => {
       total: stats.total,
       open: stats.open,
       closed: stats.closed,
+      cloudflare: stats.cloudflare,
       screenshots: stats.screenshots,
       counts: stats.counts,
       results,
@@ -136,6 +182,7 @@ router.get('/scan/:scanId/export', (req, res) => {
       'is_subdomain',
       'dns_resolved',
       'ips',
+      'cloudflare',
       'http_code',
       'scheme',
       'tcp_443',
@@ -163,6 +210,7 @@ router.get('/scan/:scanId/export', (req, res) => {
         result.is_subdomain ? 'true' : 'false',
         result.dns_resolved ? 'true' : 'false',
         `"${result.ips.join(', ')}"`,
+        result.cloudflare ? 'true' : 'false',
         result.http_code || '',
         `"${result.scheme}"`,
         result.tcp_443 ? 'true' : 'false',
@@ -210,13 +258,14 @@ function generateHtmlReport(results, stats) {
     const color = statusColors[r.status] || '#71717a';
     const ipsStr = r.ips.join(', ') || '—';
     const httpStr = r.http_code || '—';
+    const cfBadge = r.cloudflare ? '<span style="color:#f97316;font-weight:bold;margin-left:4px">☁️ CF</span>' : '';
 
     tableRows += `
       <tr>
         <td><span style="color: ${color}; font-weight: bold">${r.status_icon} ${r.status}</span></td>
         <td><code>${r.host}</code></td>
         <td>${r.domain}</td>
-        <td>${ipsStr}</td>
+        <td>${ipsStr}${cfBadge}</td>
         <td><span style="color: ${color}; font-weight: bold">${httpStr}</span></td>
         <td>${r.server || '—'}</td>
         <td>${r.final_url ? `<a href="${r.final_url}" target="_blank">${r.final_url}</a>` : '—'}</td>
@@ -303,6 +352,10 @@ function generateHtmlReport(results, stats) {
             <div class="stat-value">${stats.closed}</div>
             <div class="stat-label">Closed / No DNS</div>
           </div>
+          <div class="stat-card" style="border-left-color: #f97316">
+            <div class="stat-value" style="color: #f97316">${stats.cloudflare || 0}</div>
+            <div class="stat-label">Cloudflare IPs</div>
+          </div>
         </div>
 
         <table>
@@ -338,7 +391,7 @@ router.get('/docs', (req, res) => {
       {
         method: 'POST',
         path: '/scan',
-        description: 'Start a new domain reachability scan',
+        description: 'Start a new domain reachability scan. Accepts JSON body or multipart/form-data with a JSON file attached as "file" field.',
         body: {
           domains: [
             {
@@ -353,6 +406,7 @@ router.get('/docs', (req, res) => {
           options: {
             workers: 12,
             timeout: 10000,
+            screenshot: false,
           },
         },
         response: {
@@ -366,12 +420,13 @@ router.get('/docs', (req, res) => {
         path: '/scan/:scanId',
         description: 'Get scan results',
         response: {
-          status: 'completed',
+          status: 'completed|pending',
           results: [],
           stats: {
             total: 0,
             open: 0,
             closed: 0,
+            cloudflare: 0,
             screenshots: 0,
             counts: {},
           },

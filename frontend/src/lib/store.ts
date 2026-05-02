@@ -21,6 +21,8 @@ export interface ScanResult {
   x_frame_options: string
   x_content_type: string
   csp: boolean
+  cloudflare: boolean
+  cf_ray: string
   whatweb: string[]
   screenshot: string | null
   scan_time_s: number
@@ -32,6 +34,7 @@ interface Stats {
   open: number
   closed: number
   screenshots: number
+  cloudflare: number
   counts: Record<string, number>
 }
 
@@ -44,6 +47,10 @@ interface ScanStore {
     status: string
     search: string
     showOnlyWithScreenshots: boolean
+    showOnlyCloudflare: boolean
+    showOnlyHSTS: boolean
+    showOnlyCSP: boolean
+    httpCode: string
   }
   setScanResults: (results: ScanResult[]) => void
   setScanStats: (stats: Stats) => void
@@ -54,16 +61,22 @@ interface ScanStore {
   getFilteredResults: () => ScanResult[]
 }
 
+const DEFAULT_FILTERS = {
+  status: 'all',
+  search: '',
+  showOnlyWithScreenshots: false,
+  showOnlyCloudflare: false,
+  showOnlyHSTS: false,
+  showOnlyCSP: false,
+  httpCode: '',
+}
+
 export const useScanStore = create<ScanStore>((set, get) => ({
   scanResults: [],
   scanStats: null,
   scanId: null,
   isLoading: false,
-  filters: {
-    status: 'all',
-    search: '',
-    showOnlyWithScreenshots: false,
-  },
+  filters: { ...DEFAULT_FILTERS },
 
   setScanResults: (results) => set({ scanResults: results }),
   setScanStats: (stats) => set({ scanStats: stats }),
@@ -80,11 +93,7 @@ export const useScanStore = create<ScanStore>((set, get) => ({
       scanResults: [],
       scanStats: null,
       scanId: null,
-      filters: {
-        status: 'all',
-        search: '',
-        showOnlyWithScreenshots: false,
-      },
+      filters: { ...DEFAULT_FILTERS },
     }),
 
   getFilteredResults: () => {
@@ -93,17 +102,49 @@ export const useScanStore = create<ScanStore>((set, get) => ({
     const searchLower = filters.search.toLowerCase()
 
     return scanResults.filter((result) => {
+      // Status filter
       const matchesStatus =
-        filters.status === 'all' || result.status.includes(filters.status)
+        filters.status === 'all' || result.status === filters.status
+
+      // Search filter
       const matchesSearch =
         !filters.search ||
         result.host.toLowerCase().includes(searchLower) ||
         result.domain.toLowerCase().includes(searchLower) ||
-        result.ips.join(', ').toLowerCase().includes(searchLower)
-      const matchesScreenshot =
-        !filters.showOnlyWithScreenshots || result.screenshot
+        result.ips.join(', ').toLowerCase().includes(searchLower) ||
+        (result.server || '').toLowerCase().includes(searchLower) ||
+        (result.x_powered_by || '').toLowerCase().includes(searchLower)
 
-      return matchesStatus && matchesSearch && matchesScreenshot
+      // Screenshot filter
+      const matchesScreenshot =
+        !filters.showOnlyWithScreenshots || !!result.screenshot
+
+      // Cloudflare filter
+      const matchesCloudflare =
+        !filters.showOnlyCloudflare || result.cloudflare
+
+      // HSTS filter
+      const matchesHSTS =
+        !filters.showOnlyHSTS || result.hsts
+
+      // CSP filter
+      const matchesCSP =
+        !filters.showOnlyCSP || result.csp
+
+      // HTTP code filter
+      const matchesHttpCode =
+        !filters.httpCode ||
+        String(result.http_code || '').startsWith(filters.httpCode)
+
+      return (
+        matchesStatus &&
+        matchesSearch &&
+        matchesScreenshot &&
+        matchesCloudflare &&
+        matchesHSTS &&
+        matchesCSP &&
+        matchesHttpCode
+      )
     })
   },
 }))
