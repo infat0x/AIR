@@ -39,6 +39,15 @@ router.post('/scan', upload.single('file'), async (req, res) => {
       } catch (parseErr) {
         return res.status(400).json({ error: `Failed to parse JSON file: ${parseErr.message}` });
       }
+      // Also check for options sent as a FormData field
+      if (req.body && req.body.options) {
+        try {
+          const formOpts = typeof req.body.options === 'string'
+            ? JSON.parse(req.body.options)
+            : req.body.options;
+          options = { ...options, ...formOpts };
+        } catch { /* ignore parse error */ }
+      }
     } else {
       // Regular JSON body
       const body = req.body;

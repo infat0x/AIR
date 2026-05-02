@@ -120,14 +120,21 @@ function classifyStatus(httpCode, tcp443, tcp80, ips) {
 }
 
 /**
- * Take a screenshot of a URL using multiple fallback methods
+ * Shared browser instance for screenshots
  */
-async function takeScreenshot(url) {
-  // Method 1: Try puppeteer (if available)
-  try {
-    const puppeteer = await import('puppeteer').catch(() => null);
-    if (puppeteer) {
-      const browser = await puppeteer.default.launch({
+let _browser = null;
+let _browserPromise = null;
+
+async function getBrowser() {
+  if (_browser && _browser.isConnected()) return _browser;
+  if (_browserPromise) return _browserPromise;
+
+  _browserPromise = (async () => {
+    try {
+      const puppeteer = await import('puppeteer').catch(() => null);
+      if (!puppeteer) return null;
+
+      _browser = await puppeteer.default.launch({
         headless: 'new',
         args: [
           '--no-sandbox',
@@ -136,39 +143,74 @@ async function takeScreenshot(url) {
           '--disable-gpu',
           '--ignore-certificate-errors',
           '--ignore-certificate-errors-spki-list',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
         ],
         ignoreHTTPSErrors: true,
       });
 
-      const page = await browser.newPage();
-      await page.setViewport({ width: 1280, height: 720 });
-      await page.setUserAgent(
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36'
-      );
-
-      try {
-        await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
-        });
-        await new Promise((r) => globalThis.setTimeout(r, 1000));
-        const screenshot = await page.screenshot({
-          type: 'jpeg',
-          quality: 70,
-          clip: { x: 0, y: 0, width: 1280, height: 720 },
-        });
-        await browser.close();
-        return `data:image/jpeg;base64,${screenshot.toString('base64')}`;
-      } catch (pageErr) {
-        await browser.close();
-        throw pageErr;
-      }
+      console.log('📸 Puppeteer browser launched for screenshots');
+      return _browser;
+    } catch (err) {
+      console.error('📸 Failed to launch Puppeteer:', err.message);
+      return null;
+    } finally {
+      _browserPromise = null;
     }
-  } catch (err) {
-    // Puppeteer not available or failed, continue
-  }
+  })();
 
-  return null;
+  return _browserPromise;
+}
+
+/**
+ * Take a screenshot of a URL
+ */
+async function takeScreenshot(url) {
+  const browser = await getBrowser();
+  if (!browser) return null;
+
+  let page = null;
+  try {
+    page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720 });
+    await page.setUserAgent(
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36'
+    );
+
+    // Block heavy resources for speed
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const type = req.resourceType();
+      if (['font', 'media', 'websocket'].includes(type)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 12000,
+    });
+
+    // Small wait for rendering
+    await new Promise((r) => globalThis.setTimeout(r, 800));
+
+    const screenshot = await page.screenshot({
+      type: 'jpeg',
+      quality: 60,
+      clip: { x: 0, y: 0, width: 1280, height: 720 },
+    });
+
+    return `data:image/jpeg;base64,${screenshot.toString('base64')}`;
+  } catch (err) {
+    // Silently fail — screenshot is optional
+    return null;
+  } finally {
+    if (page) {
+      try { await page.close(); } catch {}
+    }
+  }
 }
 
 export async function scanHost(entry, options = {}) {
@@ -225,9 +267,9 @@ export async function scanHost(entry, options = {}) {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-  // Screenshot (only for OPEN sites to save time)
+  // Screenshot — take for any host with an HTTP response
   let screenshotData = null;
-  if (screenshot && (status === 'OPEN' || status === 'OPEN (Auth)') && httpResult.url) {
+  if (screenshot && httpResult.code && httpResult.url) {
     screenshotData = await takeScreenshot(httpResult.url).catch(() => null);
   }
 

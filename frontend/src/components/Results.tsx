@@ -233,9 +233,7 @@ export default function Results() {
                 <th className="table-header">{t('col_sec')}</th>
                 <th className="table-header">{t('col_url')}</th>
                 <th className="table-header">{t('col_time')}</th>
-                {(scanStats?.screenshots || 0) > 0 && (
-                  <th className="table-header">{t('col_shot')}</th>
-                )}
+                <th className="table-header">{t('col_shot')}</th>
               </tr>
             </thead>
             <tbody>
@@ -244,7 +242,7 @@ export default function Results() {
                   key={idx}
                   result={result}
                   t={t}
-                  showScreenshotCol={(scanStats?.screenshots || 0) > 0}
+                  showScreenshotCol={true}
                   onScreenshot={setScreenshotModal}
                 />
               ))}

@@ -13,7 +13,7 @@ export default function Scanner() {
   const [jsonInput, setJsonInput] = useState('')
   const [workers, setWorkers] = useState(12)
   const [scanTimeout, setScanTimeout] = useState(10000)
-  const [enableScreenshots, setEnableScreenshots] = useState(false)
+  const [enableScreenshots, setEnableScreenshots] = useState(true)
   const [error, setError] = useState('')
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
