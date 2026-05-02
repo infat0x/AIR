@@ -16,7 +16,7 @@
   --sm:      #52525b;
   --accent:  #0078d4;
   --accent-h:#006cbd;
-  --accent-l:#1a8ce8;
+  --accent-l:#4da6ff;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,6 +26,8 @@ body {
   color: var(--txt);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Scrollbar */
@@ -34,6 +36,9 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--sm); }
 
+/* Selection */
+::selection { background: rgba(0,120,212,0.3); }
+
 @layer components {
   .btn {
     @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer text-sm;
@@ -41,105 +46,107 @@ body {
 
   .btn-primary {
     background: var(--accent);
-    color: white;
+    color: #ffffff;
+    font-weight: 600;
   }
   .btn-primary:hover {
     background: var(--accent-h);
-  }
-  .btn-primary:active {
-    background: #005fa3;
+    box-shadow: 0 2px 8px rgba(0,120,212,0.25);
   }
 
   .btn-secondary {
-    @apply bg-zinc-800 text-zinc-200 border border-zinc-700;
+    background: #1e1e1e;
+    color: #d0d0d0;
+    border: 1px solid #333;
+    font-weight: 500;
   }
   .btn-secondary:hover {
-    @apply bg-zinc-700;
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border-color: #444;
   }
 
   .btn-ghost {
-    @apply text-muted hover:text-txt transition-colors;
+    color: #a0a0a0;
+    transition: color 0.15s;
   }
+  .btn-ghost:hover { color: #f0f0f0; }
 
   .badge {
     @apply inline-block px-2 py-0.5 text-xs font-semibold rounded;
   }
 
   .badge-green {
-    @apply bg-green-500/15 text-green-300 border border-green-500/25;
+    background: rgba(34,197,94,0.12);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.2);
   }
 
   .badge-blue {
-    background: rgba(0,120,212,0.15);
-    color: #60b4ff;
-    border: 1px solid rgba(0,120,212,0.3);
+    background: rgba(0,120,212,0.12);
+    color: #4da6ff;
+    border: 1px solid rgba(0,120,212,0.25);
   }
 
   .badge-amber {
-    @apply bg-amber-500/15 text-amber-300 border border-amber-500/25;
+    background: rgba(245,158,11,0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245,158,11,0.2);
   }
 
   .badge-teal {
-    @apply bg-teal-500/15 text-teal-300 border border-teal-500/25;
+    background: rgba(20,184,166,0.12);
+    color: #5eead4;
+    border: 1px solid rgba(20,184,166,0.2);
   }
 
   .badge-zinc {
-    @apply bg-zinc-700/60 text-zinc-300 border border-zinc-600;
+    background: rgba(113,113,122,0.15);
+    color: #a1a1aa;
+    border: 1px solid rgba(113,113,122,0.25);
   }
 
   .badge-orange {
-    background: rgba(249,115,22,0.15);
+    background: rgba(249,115,22,0.12);
     color: #fb923c;
-    border: 1px solid rgba(249,115,22,0.3);
+    border: 1px solid rgba(249,115,22,0.25);
   }
 
   .card {
-    background: var(--s3);
-    border: 1px solid var(--bdr);
+    background: #161616;
+    border: 1px solid #222;
     @apply rounded-xl;
   }
 
   .code {
     @apply font-mono text-xs px-2 py-0.5 rounded;
-    background: var(--s1);
-    color: #60b4ff;
+    background: #0d0d0d;
+    color: #4da6ff;
   }
 
   .input {
     @apply w-full rounded-lg px-4 py-2.5 text-sm transition-colors;
-    background: var(--bg);
-    border: 1px solid var(--bdr);
+    background: #0d0d0d;
+    border: 1px solid #222;
     color: var(--txt);
     outline: none;
   }
   .input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px rgba(0,120,212,0.3);
+    box-shadow: 0 0 0 2px rgba(0,120,212,0.15);
   }
   .input::placeholder {
-    color: var(--muted);
+    color: #52525b;
   }
 
   .table-header {
     @apply px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider;
-    background: var(--s1);
-    color: var(--muted);
+    background: #0d0d0d;
+    color: #71717a;
   }
 
   .table-cell {
     @apply px-4 py-3;
-    border-bottom: 1px solid var(--bdr);
+    border-bottom: 1px solid #1e1e1e;
   }
-
-  /* Accent text helpers */
-  .text-accent { color: var(--accent); }
-  .text-accent-light { color: var(--accent-l); }
-
-  /* Link style */
-  .link {
-    color: var(--accent-l);
-    text-decoration: none;
-    transition: color 0.15s;
-  }
-  .link:hover { color: #93c9ff; }
 }
