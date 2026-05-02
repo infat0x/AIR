@@ -1,6 +1,5 @@
-'use client'
-
-import { useState, createContext, useContext } from 'react'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export const languages = {
   az: {
@@ -51,7 +50,7 @@ export const languages = {
     attach_file: 'JSON fayl əlavə et',
     drag_drop: 'JSON faylı bura sürükleyin',
     workers: 'İşçi sayı',
-    timeout: 'Zaman aşımı (ms)',
+    timeout: 'Zaman aşımı',
     screenshot: 'Ekran görüntüsü',
     export: 'İxrac et',
     json_format: 'JSON',
@@ -64,6 +63,12 @@ export const languages = {
     error: 'Xəta',
     details: 'Detallar',
     no_results: 'Filterlərə uyğun nəticə yoxdur',
+    history: 'Tarixçə',
+    no_history: 'Hələ heç bir skan yoxdur',
+    clear_history: 'Tarixçəni təmizlə',
+    confirm_clear: 'Bütün tarixçəni silmək istəyirsiniz?',
+    yes_clear: 'Bəli, sil',
+    cancel: 'Ləğv et',
     http_filter: 'HTTP kodu',
     advanced_filters: 'Ətraflı Filterlər',
     clear_filters: 'Filterləri sıfırla',
@@ -118,7 +123,7 @@ export const languages = {
     attach_file: 'Attach JSON File',
     drag_drop: 'Drag & drop a JSON file here',
     workers: 'Workers',
-    timeout: 'Timeout (ms)',
+    timeout: 'Timeout',
     screenshot: 'Screenshots',
     export: 'Export',
     json_format: 'JSON',
@@ -131,6 +136,12 @@ export const languages = {
     error: 'Error',
     details: 'Details',
     no_results: 'No results match your filters',
+    history: 'History',
+    no_history: 'No scans yet',
+    clear_history: 'Clear history',
+    confirm_clear: 'Delete all history?',
+    yes_clear: 'Yes, clear',
+    cancel: 'Cancel',
     http_filter: 'HTTP Code',
     advanced_filters: 'Advanced Filters',
     clear_filters: 'Clear Filters',
@@ -185,7 +196,7 @@ export const languages = {
     attach_file: 'Прикрепить JSON файл',
     drag_drop: 'Перетащите JSON файл сюда',
     workers: 'Рабочих процессов',
-    timeout: 'Тайм-аут (мс)',
+    timeout: 'Тайм-аут',
     screenshot: 'Скриншоты',
     export: 'Экспорт',
     json_format: 'JSON',
@@ -198,6 +209,12 @@ export const languages = {
     error: 'Ошибка',
     details: 'Детали',
     no_results: 'Нет результатов по вашим фильтрам',
+    history: 'История',
+    no_history: 'Нет сканирований',
+    clear_history: 'Очистить историю',
+    confirm_clear: 'Удалить всю историю?',
+    yes_clear: 'Да, удалить',
+    cancel: 'Отмена',
     http_filter: 'HTTP Код',
     advanced_filters: 'Расширенные фильтры',
     clear_filters: 'Сбросить фильтры',
@@ -207,40 +224,33 @@ export const languages = {
 } as const
 
 export type Language = keyof typeof languages
-export type Translations = typeof languages[Language]
+export type TranslationKey = keyof typeof languages['en']
 
-const LanguageContext = createContext<{
+// Zustand store for language — no React Context needed
+interface LanguageStore {
   language: Language
   setLanguage: (lang: Language) => void
-  t: (key: keyof Translations) => string
-} | null>(null)
-
-export function useLanguage() {
-  const context = useContext(LanguageContext)
-  if (!context) {
-    return {
-      language: 'en' as Language,
-      setLanguage: (_lang: Language) => {},
-      t: (key: keyof Translations) => languages.en[key] as string,
-    }
-  }
-  return context
+  t: (key: TranslationKey) => string
 }
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('en')
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang)
-  }
-
-  const t = (key: keyof Translations): string => {
-    return (languages[language][key] as string) ?? (languages.en[key] as string) ?? key
-  }
-
-  return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
-      {children}
-    </LanguageContext.Provider>
+export const useLanguage = create<LanguageStore>()(
+  persist(
+    (set, get) => ({
+      language: 'en' as Language,
+      setLanguage: (lang: Language) => set({ language: lang }),
+      t: (key: TranslationKey): string => {
+        const lang = get().language
+        return (languages[lang]?.[key] as string) ?? (languages.en[key] as string) ?? key
+      },
+    }),
+    {
+      name: 'air-language',
+      partialize: (state) => ({ language: state.language }),
+    }
   )
+)
+
+// Keep LanguageProvider as a no-op wrapper for backward compat
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }

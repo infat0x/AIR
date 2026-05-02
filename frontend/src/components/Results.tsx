@@ -307,7 +307,7 @@ function ResultRow({
   result, t, showScreenshotCol, onScreenshot,
 }: {
   result: ScanResult
-  t: (key: string) => string
+  t: (key: any) => string
   showScreenshotCol: boolean
   onScreenshot: (src: string) => void
 }) {

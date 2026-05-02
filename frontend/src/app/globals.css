@@ -2,91 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
-  --bg: #0a0a0a;
-  --s1: #111111;
-  --s2: #171717;
-  --s3: #1f1f1f;
-  --bdr: #2a2a2a;
-  --bdr2: #333333;
-  --txt: #f0f0f0;
-  --muted: #71717a;
-  --sm: #52525b;
+  --bg:      #0a0a0a;
+  --s1:      #111111;
+  --s2:      #171717;
+  --s3:      #1f1f1f;
+  --bdr:     #2a2a2a;
+  --bdr2:    #333333;
+  --txt:     #f0f0f0;
+  --muted:   #71717a;
+  --sm:      #52525b;
+  --accent:  #0078d4;
+  --accent-h:#006cbd;
+  --accent-l:#1a8ce8;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
   background: var(--bg);
   color: var(--txt);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   min-height: 100vh;
 }
 
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--s1); }
+::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--sm); }
+
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer;
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer text-sm;
   }
 
   .btn-primary {
-    @apply bg-green-600 text-white hover:bg-green-700;
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover {
+    background: var(--accent-h);
+  }
+  .btn-primary:active {
+    background: #005fa3;
   }
 
   .btn-secondary {
-    @apply bg-zinc-700 text-white hover:bg-zinc-600;
+    @apply bg-zinc-800 text-zinc-200 border border-zinc-700;
+  }
+  .btn-secondary:hover {
+    @apply bg-zinc-700;
+  }
+
+  .btn-ghost {
+    @apply text-muted hover:text-txt transition-colors;
   }
 
   .badge {
-    @apply inline-block px-3 py-1 text-xs font-semibold rounded;
+    @apply inline-block px-2 py-0.5 text-xs font-semibold rounded;
   }
 
   .badge-green {
-    @apply bg-green-500/20 text-green-300 border border-green-500/30;
+    @apply bg-green-500/15 text-green-300 border border-green-500/25;
+  }
+
+  .badge-blue {
+    background: rgba(0,120,212,0.15);
+    color: #60b4ff;
+    border: 1px solid rgba(0,120,212,0.3);
   }
 
   .badge-amber {
-    @apply bg-amber-500/20 text-amber-300 border border-amber-500/30;
+    @apply bg-amber-500/15 text-amber-300 border border-amber-500/25;
   }
 
   .badge-teal {
-    @apply bg-teal-500/20 text-teal-300 border border-teal-500/30;
+    @apply bg-teal-500/15 text-teal-300 border border-teal-500/25;
   }
 
   .badge-zinc {
-    @apply bg-zinc-700 text-zinc-300 border border-zinc-600;
+    @apply bg-zinc-700/60 text-zinc-300 border border-zinc-600;
+  }
+
+  .badge-orange {
+    background: rgba(249,115,22,0.15);
+    color: #fb923c;
+    border: 1px solid rgba(249,115,22,0.3);
   }
 
   .card {
-    @apply bg-dark-3 border border-dark-5 rounded-lg;
+    background: var(--s3);
+    border: 1px solid var(--bdr);
+    @apply rounded-xl;
   }
 
   .code {
-    @apply font-mono text-xs bg-dark-1 px-2 py-1 rounded;
+    @apply font-mono text-xs px-2 py-0.5 rounded;
+    background: var(--s1);
+    color: #60b4ff;
   }
 
   .input {
-    @apply w-full rounded-lg px-4 py-2 focus:outline-none focus:ring-1;
-    background-color: var(--bg);
+    @apply w-full rounded-lg px-4 py-2.5 text-sm transition-colors;
+    background: var(--bg);
     border: 1px solid var(--bdr);
     color: var(--txt);
-    focus-color: var(--bdr);
+    outline: none;
   }
-
   .input:focus {
-    border-color: var(--bdr);
-    --tw-ring-color: var(--bdr);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(0,120,212,0.3);
+  }
+  .input::placeholder {
+    color: var(--muted);
   }
 
   .table-header {
-    @apply bg-dark-1 px-4 py-3 text-left font-medium text-xs uppercase tracking-wider;
+    @apply px-4 py-3 text-left font-semibold text-xs uppercase tracking-wider;
+    background: var(--s1);
     color: var(--muted);
   }
 
   .table-cell {
-    @apply px-4 py-3 border-b border-dark-2;
+    @apply px-4 py-3;
+    border-bottom: 1px solid var(--bdr);
   }
+
+  /* Accent text helpers */
+  .text-accent { color: var(--accent); }
+  .text-accent-light { color: var(--accent-l); }
+
+  /* Link style */
+  .link {
+    color: var(--accent-l);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .link:hover { color: #93c9ff; }
 }

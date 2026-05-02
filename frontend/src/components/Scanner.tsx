@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
 export default function Scanner() {
   const { t } = useLanguage()
-  const { setScanResults, setScanStats, setScanId, setIsLoading, isLoading } = useScanStore()
+  const { setScanResults, setScanStats, setScanId, setIsLoading, isLoading, saveToHistory } = useScanStore()
   const [jsonInput, setJsonInput] = useState('')
   const [workers, setWorkers] = useState(12)
   const [scanTimeout, setScanTimeout] = useState(10000)
@@ -64,8 +64,16 @@ export default function Scanner() {
     try {
       let scanId: string
       let entriesCount: number
+      let parsedDomains: Array<{ domain: string; subdomains: string[] }> = []
 
       if (attachedFile) {
+        // Parse attached file to get domains for history
+        try {
+          const content = jsonInput || await attachedFile.text()
+          const parsed = JSON.parse(content)
+          parsedDomains = Array.isArray(parsed) ? parsed : parsed.domains || []
+        } catch { /* will be caught by server */ }
+
         // Send as multipart/form-data with file
         const formData = new FormData()
         formData.append('file', attachedFile)
@@ -92,6 +100,7 @@ export default function Scanner() {
       } else {
         // Send as JSON body
         const domains = JSON.parse(jsonInput)
+        parsedDomains = Array.isArray(domains) ? domains : []
 
         if (!Array.isArray(domains)) {
           throw new Error('Input must be an array of domains')
@@ -138,6 +147,8 @@ export default function Scanner() {
             setScanResults(result.results)
             setScanStats(result.stats)
             isCompleted = true
+            // Auto-save to history
+            globalThis.setTimeout(() => saveToHistory(parsedDomains), 100)
           } else if (result.status === 'error') {
             throw new Error(result.error || 'Scan failed')
           } else if (result.status === 'pending' && result.entriesCount) {
